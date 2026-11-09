@@ -43,3 +43,6 @@ dist/
 
 # Salidas del pipeline: se generan con los scripts o en GitHub Actions, no se versionan
 data/processed/*.csv
+
+# MLflow local tracking
+mlruns/

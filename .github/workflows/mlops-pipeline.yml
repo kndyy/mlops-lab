@@ -86,3 +86,46 @@ jobs:
           name: preprocessor
           path: models/trained/preprocessor.pkl
           if-no-files-found: error
+
+  model-training:
+    name: Model Training
+    needs: feature-engineering
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Download featured data
+        uses: actions/download-artifact@v4
+        with:
+          name: featured-data
+          path: data/processed/
+
+      - name: Train model
+        run: |
+          mkdir -p models/trained
+          python src/models/train_model.py --config configs/model_config.yaml --data data/processed/featured_house_data.csv --models-dir models
+
+      - name: Upload trained model
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: models/trained/house_price_model.pkl
+          if-no-files-found: error

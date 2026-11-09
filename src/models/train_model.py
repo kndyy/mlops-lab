@@ -5,7 +5,7 @@ import joblib
 import mlflow
 import mlflow.sklearn
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 import yaml
@@ -86,10 +86,17 @@ def main(args):
     data = pd.read_csv(args.data)
     target = model_cfg['target_variable']
 
-    # Use all features except the target variable
-    X = data.drop(columns=[target])
+    # Use all features except the target and the fixed-holdout marker
+    feature_columns = [c for c in data.columns if c not in (target, "split")]
+    X = data[feature_columns]
     y = data[target]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    if "split" in data.columns:
+        train_mask = data["split"] == "train"
+        X_train, y_train = X[train_mask], y[train_mask]
+        X_test, y_test = X[~train_mask], y[~train_mask]
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # Get model
     model = get_model_instance(model_cfg['best_model'], model_cfg['parameters'])
@@ -101,11 +108,12 @@ def main(args):
         y_pred = model.predict(X_test)
 
         mae = float(mean_absolute_error(y_test, y_pred))
+        rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
         r2 = float(r2_score(y_test, y_pred))
 
         # Log params and metrics
         mlflow.log_params(model_cfg['parameters'])
-        mlflow.log_metrics({'mae': mae, 'r2': r2})
+        mlflow.log_metrics({'mae': mae, 'rmse': rmse, 'r2': r2})
 
         input_example = X_train.head(1)  # Sample input for signature
         mlflow.sklearn.log_model(
@@ -159,6 +167,7 @@ def main(args):
             f"Model saved at: {args.models_dir}/trained/{model_name}.pkl\n"
             f"Performance metrics:\n"
             f"  - MAE: {mae:.2f}\n"
+            f"  - RMSE: {rmse:.2f}\n"
             f"  - R²: {r2:.4f}"
         )
         client.update_registered_model(name=model_name, description=description)
